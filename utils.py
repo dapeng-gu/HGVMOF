@@ -79,7 +79,7 @@ def plot_scatter_with_deviation(y_true, y_pred, r2, r2_title):
     cmap = LinearSegmentedColormap.from_list('custom_cmap',
                                              [(161 / 255, 225 / 255, 250 / 255), (12 / 255, 108 / 255, 196 / 255)])
 
-    plt.figure(figsize=(8, 6.5), dpi=500)
+    plt.figure(figsize=(8, 6.5), dpi=100)
     plt.scatter(y_pred, y_true, alpha=0.5, s=120, c=deviation, cmap=cmap)
 
     plt.text(0.05, 0.95, f'R² = {r2:.2f}', fontsize=32, color='black', ha='left', va='top',
@@ -109,7 +109,7 @@ def plot_scatter_with_deviation(y_true, y_pred, r2, r2_title):
 
 
 def pca_image(data_pca, y, index, y_label):
-    plt.figure(figsize=(8, 6.5), dpi=500)
+    plt.figure(figsize=(8, 6.5), dpi=100)
     scatter = plt.scatter(data_pca[:, 0], data_pca[:, 1], c=y[:, index], s=2.5, lw=1.5, cmap='viridis_r',
                           edgecolor=None)
     plt.colorbar(scatter)
