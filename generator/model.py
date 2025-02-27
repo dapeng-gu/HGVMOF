@@ -195,28 +195,31 @@ class PropDecoderWithMotif(nn.Module):
         self.labels = vocab_y.labels
         weights = torch.from_numpy(np.array(weights).astype(np.float32))
         self.loss_weights = nn.Parameter(weights, requires_grad=False)
-        layer_dims = [314] + [latent_size] + [latent_dim] * (n_layers + 2) + \
-                     [int(latent_dim / 2)] + [int(latent_dim / 4)] + [1]
-        layer_dims_co2 = [314] + [latent_dim] * n_layers + [int(latent_dim / 4)] + [int(latent_dim / 8)] + [1]
 
-        self.mlp_lcd = make_mlp(layer_dims, act, batchnorm, dropout, activation_last=False)
-        self.mlp_pld = make_mlp(layer_dims, act, batchnorm, dropout, activation_last=False)
-        self.mlp_density = make_mlp(layer_dims, act, batchnorm, dropout, activation_last=False)
-        self.mlp_agsa = make_mlp(layer_dims, act, batchnorm, dropout, activation_last=False)
-        self.mlp_co2n2_co2_mol_kg = make_mlp(layer_dims_co2, act, batchnorm, dropout, activation_last=False)
-        self.mlp_co2n2_n2_mol_kg = make_mlp(layer_dims, act, batchnorm, dropout, activation_last=False)
-        self.mlp_co2ch4_co2_mol_kg = make_mlp(layer_dims_co2, act, batchnorm, dropout, activation_last=False)
-        self.mlp_co2ch4_ch4_mol_kg = make_mlp(layer_dims, act, batchnorm, dropout, activation_last=False)
+        layer_dims = ([314] + [latent_size] + [latent_dim] * (n_layers + 2)
+                      + [int(latent_dim / 2)] + [int(latent_dim / 4)])
+        self.mlp = make_mlp(layer_dims, act, batchnorm, dropout, activation_last=False)
+
+        mlp_spilt_dims = [int(latent_dim / 4)] + [int(latent_dim / 8)] + [1]
+        self.mlp_lcd = make_mlp(mlp_spilt_dims, act, batchnorm, dropout, activation_last=False)
+        self.mlp_pld = make_mlp(mlp_spilt_dims, act, batchnorm, dropout, activation_last=False)
+        self.mlp_density = make_mlp(mlp_spilt_dims, act, batchnorm, dropout, activation_last=False)
+        self.mlp_agsa = make_mlp(mlp_spilt_dims, act, batchnorm, dropout, activation_last=False)
+        self.mlp_co2n2_co2_mol_kg = make_mlp(mlp_spilt_dims, act, batchnorm, dropout, activation_last=False)
+        self.mlp_co2n2_n2_mol_kg = make_mlp(mlp_spilt_dims, act, batchnorm, dropout, activation_last=False)
+        self.mlp_co2ch4_co2_mol_kg = make_mlp(mlp_spilt_dims, act, batchnorm, dropout, activation_last=False)
+        self.mlp_co2ch4_ch4_mol_kg = make_mlp(mlp_spilt_dims, act, batchnorm, dropout, activation_last=False)
 
         self.mlp_spilt = [self.mlp_lcd, self.mlp_pld, self.mlp_density, self.mlp_agsa, self.mlp_co2n2_co2_mol_kg,
                           self.mlp_co2n2_n2_mol_kg, self.mlp_co2ch4_co2_mol_kg, self.mlp_co2ch4_ch4_mol_kg]
 
     def forward(self, root_vecs: torch.Tensor, tree_vecs: torch.Tensor, y: torch.Tensor, mask: torch.Tensor) \
             -> tuple[list, torch.Tensor]:
-        y_hat = OrderedDict()
         tree_vecs_pooled = tree_vecs.mean(dim=0)
         tree_vecs_pooled_transformed = tree_vecs_pooled.view(1, -1).expand(root_vecs.size(0), -1)
         concatenated_features = torch.cat((root_vecs, tree_vecs_pooled_transformed), dim=1)
+        y_hat = OrderedDict()
+        concatenated_features = self.mlp(concatenated_features)
         for index, net in enumerate(self.mlp_spilt):
             y_hat[index] = net(concatenated_features)
         y_pred = torch.cat([y_hat[i] for i in y_hat], dim=1)
@@ -224,15 +227,8 @@ class PropDecoderWithMotif(nn.Module):
         return losses, y_pred
 
     def z_to_y(self, root_vecs: torch.Tensor, tree_vecs: torch.Tensor) -> np.ndarray:
-        y_hat = OrderedDict()
-        tree_vecs_pooled = tree_vecs.mean(dim=0)
-        tree_vecs_pooled_transformed = tree_vecs_pooled.view(1, -1).expand(root_vecs.size(0), -1)
-        concatenated_features = torch.cat((root_vecs, tree_vecs_pooled_transformed), dim=1)
-        with torch.no_grad():
-            for index, net in enumerate(self.mlp_spilt):
-                y_hat[index] = net(concatenated_features)
-            y_pred = torch.cat([y_hat[i] for i in y_hat], dim=1)
-            y = self.scaler.inverse_transform(y_pred.cpu().numpy())
+        y_pred = self.z_to_scalar_y(root_vecs, tree_vecs)
+        y = self.scaler.inverse_transform(y_pred.cpu().numpy())
         return y
 
     def z_to_scalar_y(self, root_vecs: torch.Tensor, tree_vecs: torch.Tensor) -> torch.Tensor:
@@ -240,6 +236,8 @@ class PropDecoderWithMotif(nn.Module):
         tree_vecs_pooled = tree_vecs.mean(dim=0)
         tree_vecs_pooled_transformed = tree_vecs_pooled.view(1, -1).expand(root_vecs.size(0), -1)
         concatenated_features = torch.cat((root_vecs, tree_vecs_pooled_transformed), dim=1)
+
+        concatenated_features = self.mlp(concatenated_features)
         with torch.no_grad():
             for index, net in enumerate(self.mlp_spilt):
                 y_hat[index] = net(concatenated_features)

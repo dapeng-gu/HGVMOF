@@ -1,6 +1,7 @@
-from typing import  Text, List
+from typing import Text, List
 
 import torch.nn as nn
+
 
 def make_mlp(layer_dims: List[int], act: Text = 'relu', batchnorm: bool = False, dropout: float = 0.0,
              activation_last: bool = False) -> nn.Sequential:
@@ -20,6 +21,7 @@ def make_mlp(layer_dims: List[int], act: Text = 'relu', batchnorm: bool = False,
             layers.append(nn.Dropout(dropout))
 
     return nn.Sequential(*layers)
+
 
 def get_activation(astr: Text) -> nn.modules.activation:
     activations = {'selu': nn.SELU, 'relu': nn.ReLU, 'prelu': nn.PReLU, 'leaky_relu': nn.LeakyReLU,

@@ -1,7 +1,11 @@
+from networkx.algorithms.cycles import simple_cycles
+import torch
+import rdkit
+import rdkit.Chem as Chem
 import networkx as nx
 from hgraph.chemutils import *
-from hgraph.chemutils import get_mol
 from hgraph.nnutils import *
+import numpy as np
 
 add = lambda x, y: x + y if type(x) is int else (x[0] + y, x[1] + y)
 
@@ -13,33 +17,36 @@ class MolGraph(object):
 
     def __init__(self, smiles):
         self.smiles = smiles
-        self.mol = get_mol(smiles)
+        self.mol = get_mol(self.smiles)
 
         self.mol_graph = self.build_mol_graph()
         self.clusters, self.atom_cls = self.find_clusters()
         self.mol_tree = self.tree_decomp()
         self.order = self.label_tree()
 
-    def find_clusters(self):
+    def find_clusters(self):  # 寻找小的分子簇，atom_cls 某个原子在哪个簇里面
         mol = self.mol
         n_atoms = mol.GetNumAtoms()
-        if n_atoms == 1:
+        if n_atoms == 1:  # special case
             return [(0,)], [[0]]
 
         clusters = []
+
+        # 寻找非环键
         for bond in mol.GetBonds():
             a1 = bond.GetBeginAtom().GetIdx()
             a2 = bond.GetEndAtom().GetIdx()
             if not bond.IsInRing():
                 clusters.append((a1, a2))
-
+        # 寻找所有环结构中的键
         ssr = [tuple(x) for x in Chem.GetSymmSSSR(mol)]
         clusters.extend(ssr)
 
-        if 0 not in clusters[0]:
+        if 0 not in clusters[0]:  # root is not node[0]
             for i, cls in enumerate(clusters):
                 if 0 in cls:
                     clusters = [clusters[i]] + clusters[:i] + clusters[i + 1:]
+                    # clusters[i], clusters[0] = clusters[0], clusters[i]
                     break
 
         atom_cls = [[] for i in range(n_atoms)]
@@ -49,24 +56,23 @@ class MolGraph(object):
 
         return clusters, atom_cls
 
-    def tree_decomp(self):
+    def tree_decomp(self):  # 创建新的graph，node为原子簇cluster
         clusters = self.clusters
         graph = nx.empty_graph(len(clusters))
         for atom, nei_cls in enumerate(self.atom_cls):
-            if len(nei_cls) <= 1:
-                continue
+            if len(nei_cls) <= 1: continue
             bonds = [c for c in nei_cls if len(clusters[c]) == 2]
-            rings = [c for c in nei_cls if len(clusters[c]) > 4]
+            rings = [c for c in nei_cls if len(clusters[c]) > 4]  # need to change to 2
 
-            if len(nei_cls) > 2 and len(bonds) >= 2:
+            if len(nei_cls) > 2 and len(bonds) >= 2:  # 将连接多个边的原子点视为一个簇？
                 clusters.append([atom])
                 c2 = len(clusters) - 1
                 graph.add_node(c2)
                 for c1 in nei_cls:
                     graph.add_edge(c1, c2, weight=100)
 
-            elif len(rings) > 2:
-                clusters.append([atom])
+            elif len(rings) > 2:  # Bee Hives, len(nei_cls) > 2
+                clusters.append([atom])  # temporary value, need to change
                 c2 = len(clusters) - 1
                 graph.add_node(c2)
                 for c1 in nei_cls:
@@ -78,11 +84,11 @@ class MolGraph(object):
                         graph.add_edge(c1, c2, weight=len(inter))
 
         n, m = len(graph.nodes), len(graph.edges)
-        assert n - m <= 1
+        assert n - m <= 1  # must be connected
         return graph if n - m == 1 else nx.maximum_spanning_tree(graph)
 
     def label_tree(self):
-        def dfs(order, pa, prev_sib, x, fa):
+        def dfs(order, pa, prev_sib, x, fa):  # 深度优先，从root开始给簇点加上label和位置信息、顺序
             pa[x] = fa
             sorted_child = sorted([y for y in self.mol_tree[x] if y != fa])  # better performance with fixed order
             for idx, y in enumerate(sorted_child):
@@ -107,7 +113,7 @@ class MolGraph(object):
 
         tree = self.mol_tree
         for i, cls in enumerate(self.clusters):
-            inter_atoms = set(cls) & set(self.clusters[pa[i]]) if pa[i] >= 0 else set([0])
+            inter_atoms = set(cls) & set(self.clusters[pa[i]]) if pa[i] >= 0 else set([0])  # 当前簇和前面一个簇的交集点
             cmol, inter_label = get_inter_label(mol, cls, inter_atoms)
             tree.nodes[i]['ismiles'] = ismiles = get_smiles(cmol)
             tree.nodes[i]['inter_label'] = inter_label
@@ -148,13 +154,13 @@ class MolGraph(object):
 
     @staticmethod
     def tensorize(mol_batch, vocab, avocab):
-        mol_batch = [MolGraph(x) for x in mol_batch]
-        tree_tensors, tree_batchG = MolGraph.tensorize_graph([x.mol_tree for x in mol_batch], vocab)
-        graph_tensors, graph_batchG = MolGraph.tensorize_graph([x.mol_graph for x in mol_batch], avocab)
+        smiles_batch = [MolGraph(x) for x in mol_batch]
+        tree_tensors, tree_batchG = MolGraph.tensorize_graph([x.mol_tree for x in smiles_batch], vocab)
+        graph_tensors, graph_batchG = MolGraph.tensorize_graph([x.mol_graph for x in smiles_batch], avocab)
         tree_scope = tree_tensors[-1]
         graph_scope = graph_tensors[-1]
 
-        max_cls_size = max([len(c) for x in mol_batch for c in x.clusters])
+        max_cls_size = max([len(c) for x in smiles_batch for c in x.clusters])
         cgraph = torch.zeros(len(tree_batchG) + 1, max_cls_size).int()
         for v, attr in tree_batchG.nodes(data=True):
             bid = attr['batch_id']
@@ -165,13 +171,14 @@ class MolGraph(object):
             cgraph[v, :len(cls)] = torch.IntTensor(cls)
 
         all_orders = []
-        for i, hmol in enumerate(mol_batch):
+        for i, hmol in enumerate(smiles_batch):
             offset = tree_scope[i][0]
             order = [(x + offset, y + offset, z) for x, y, z in hmol.order[:-1]] + [
                 (hmol.order[-1][0] + offset, None, 0)]
             all_orders.append(order)
 
         tree_tensors = tree_tensors[:4] + (cgraph, tree_scope)
+
         return (tree_batchG, graph_batchG), (tree_tensors, graph_tensors), all_orders
 
     @staticmethod
@@ -180,35 +187,34 @@ class MolGraph(object):
         agraph, bgraph = [[]], [[]]
         scope = []
         edge_dict = {}
-        all_g = []
+        all_G = []
 
-        for bid, g in enumerate(graph_batch):
+        for bid, G in enumerate(graph_batch):
             offset = len(fnode)
-            scope.append((offset, len(g)))
-            g = nx.convert_node_labels_to_integers(g, first_label=offset)
-            all_g.append(g)
-            fnode.extend([None for v in g.nodes])
+            scope.append((offset, len(G)))
+            G = nx.convert_node_labels_to_integers(G, first_label=offset)
+            all_G.append(G)
+            fnode.extend([None for v in G.nodes])
 
-            for v, attr in g.nodes(data='label'):
-                g.nodes[v]['batch_id'] = bid
+            for v, attr in G.nodes(data='label'):
+                G.nodes[v]['batch_id'] = bid
                 fnode[v] = vocab[attr]
                 agraph.append([])
 
-            for u, v, attr in g.edges(data='label'):
+            for u, v, attr in G.edges(data='label'):
                 if type(attr) is tuple:
                     fmess.append((u, v, attr[0], attr[1]))
                 else:
                     fmess.append((u, v, attr, 0))
                 edge_dict[(u, v)] = eid = len(edge_dict) + 1
-                g[u][v]['mess_idx'] = eid
+                G[u][v]['mess_idx'] = eid
                 agraph[v].append(eid)
                 bgraph.append([])
 
-            for u, v in g.edges:
+            for u, v in G.edges:
                 eid = edge_dict[(u, v)]
-                for w in g.predecessors(u):
-                    if w == v:
-                        continue
+                for w in G.predecessors(u):  # 父节点
+                    if w == v: continue
                     bgraph[eid].append(edge_dict[(w, u)])
 
         fnode[0] = fnode[1]
@@ -216,4 +222,4 @@ class MolGraph(object):
         fmess = torch.IntTensor(fmess)
         agraph = create_pad_tensor(agraph)
         bgraph = create_pad_tensor(bgraph)
-        return (fnode, fmess, agraph, bgraph, scope), nx.union_all(all_g)
+        return (fnode, fmess, agraph, bgraph, scope), nx.union_all(all_G)

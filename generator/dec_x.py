@@ -1,11 +1,7 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from generator.enc_x import IncHierMPNEncoder
+import numpy as np
 
+from generator.enc_x import IncHierMPNEncoder
 from hgraph.nnutils import *
-from hgraph.mol_graph import MolGraph
-from hgraph.nnutils import index_select_ND
 from hgraph.mol_graph import MolGraph
 from hgraph.inc_graph import IncTree, IncGraph
 
@@ -20,7 +16,7 @@ class HierMPNDecoder(nn.Module):
 
     def __init__(self, vocab, avocab, rnn_type, embed_size, hidden_size, latent_size, depthT, depthG, dropout,
                  attention=False):
-        super(HierMPNDecoder, self).__init__()
+        super().__init__()
         self.vocab = vocab
         self.avocab = avocab
         self.hidden_size = hidden_size
@@ -108,9 +104,6 @@ class HierMPNDecoder(nn.Module):
 
         for i, tup in enumerate(tree_tensors[-1]):
             root = tup[0]
-            if (agraph[root, -1].item() != 0):
-                a = input()
-                print(agraph[root, -1].item())
             assert agraph[root, -1].item() == 0
             agraph[root, -1] = num_mess + i
             for v in tree_batch.successors(root):
@@ -172,7 +165,7 @@ class HierMPNDecoder(nn.Module):
         tree_batch, graph_batch = graphs
         tree_tensors, graph_tensors = tensors
         inter_tensors = tree_tensors
-
+        # 三个vecs是一样的
         src_root_vecs, src_tree_vecs, src_graph_vecs = src_mol_vecs
         init_vecs = src_root_vecs if self.latent_size == self.hidden_size else self.W_root(src_root_vecs)
 
@@ -279,6 +272,7 @@ class HierMPNDecoder(nn.Module):
             assm_acc = get_accuracy_sym(assm_scores, assm_labels)
         else:
             assm_loss, assm_acc = 0, 1
+            assm_acc = torch.tensor(assm_acc).cuda()
 
         loss = (topo_loss + cls_loss + assm_loss) / batch_size
         return loss, cls_acc, icls_acc, topo_acc, assm_acc
@@ -301,13 +295,16 @@ class HierMPNDecoder(nn.Module):
 
     def decode(self, src_mol_vecs, greedy=True, max_decode_step=100, beam=5):
         src_root_vecs, src_tree_vecs, src_graph_vecs = src_mol_vecs
+        if isinstance(src_root_vecs, np.ndarray):
+            src_root_vecs = torch.from_numpy(src_root_vecs).cuda()
+            src_tree_vecs = torch.from_numpy(src_tree_vecs).cuda()
+            src_graph_vecs = torch.from_numpy(src_graph_vecs).cuda()
         batch_size = len(src_root_vecs)
 
         tree_batch = IncTree(batch_size, node_fdim=2, edge_fdim=3)
         graph_batch = IncGraph(self.avocab, batch_size, node_fdim=self.hmpn.atom_size,
                                edge_fdim=self.hmpn.atom_size + self.hmpn.bond_size)
         stack = [[] for i in range(batch_size)]
-
         init_vecs = src_root_vecs if self.latent_size == self.hidden_size else self.W_root(src_root_vecs)
         batch_idx = self.itensor.new_tensor(range(batch_size))
         cls_scores, icls_scores = self.get_cls_score(src_tree_vecs, batch_idx, init_vecs, None)
@@ -441,3 +438,4 @@ class HierMPNDecoder(nn.Module):
                         new_edge = tree_batch.add_edge(child, stack[bid][-1], edge_feature)
 
         return graph_batch.get_mol()
+

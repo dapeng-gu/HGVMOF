@@ -22,8 +22,8 @@ def get_config() -> AttributeDict:
     config.update(train_config())
     config.update(generator_config())
     config.update(vocab_atom_config())
-    config.update(load_config())
     config.update(opt_config())
+    config.update(predict_config())
     return config
 
 
@@ -51,6 +51,18 @@ def y_config():
     config = AttributeDict()
     config['y_weights'] = [1, 1, 1, 1, 1, 1, 1, 1]
     config['y_scaler_type'] = 'standard'
+    return config
+
+
+def vocab_atom_config():
+    config = AttributeDict()
+    config['COMMON_ATOMS'] = [('B', 0), ('B', -1), ('Br', 0), ('Br', -1), ('Br', 2), ('C', 0), ('C', 1),
+                              ('C', -1), ('Cl', 0), ('Cl', 1), ('Cl', -1), ('Cl', 2), ('Cl', 3), ('F', 0),
+                              ('F', 1), ('F', -1), ('I', -1), ('I', 0), ('I', 1), ('I', 2), ('I', 3), ('N', 0),
+                              ('N', 1), ('N', -1), ('O', 0), ('O', 1), ('O', -1), ('P', 0), ('P', 1), ('P', -1),
+                              ('S', 0), ('S', 1), ('S', -1), ('Se', 0), ('Se', 1), ('Se', -1), ('Si', 0), ('Si', -1),
+                              ('Lr', 0)]
+
     return config
 
 
@@ -98,7 +110,12 @@ def train_config():
     config['get_tensors_batch_size'] = 1536
     config['generator_rand_seed'] = 7
     config['generator_train_epoch'] = 120
-    config['predic_train_epoch'] = 200
+    config['predict_train_epoch'] = 200
+
+    config['load_model'] = True
+    config['load_model_y'] = True
+    config['best_model'] = 'results/best/model'
+    config['best_model_y'] = 'results/best/model_y'
     return config
 
 
@@ -146,24 +163,11 @@ def generator_config():
     return config
 
 
-def vocab_atom_config():
+def predict_config():
     config = AttributeDict()
-    config['COMMON_ATOMS'] = [('B', 0), ('B', -1), ('Br', 0), ('Br', -1), ('Br', 2), ('C', 0), ('C', 1),
-                              ('C', -1), ('Cl', 0), ('Cl', 1), ('Cl', -1), ('Cl', 2), ('Cl', 3), ('F', 0),
-                              ('F', 1), ('F', -1), ('I', -1), ('I', 0), ('I', 1), ('I', 2), ('I', 3), ('N', 0),
-                              ('N', 1), ('N', -1), ('O', 0), ('O', 1), ('O', -1), ('P', 0), ('P', 1), ('P', -1),
-                              ('S', 0), ('S', 1), ('S', -1), ('Se', 0), ('Se', 1), ('Se', -1), ('Si', 0), ('Si', -1),
-                              ('Lr', 0)]
-
-    return config
-
-
-def load_config():
-    config = AttributeDict()
-    config['load_model'] = True
-    config['load_model_y'] = False
-    config['best_model'] = 'results/best/model'
-    config['best_model_y'] = 'results/best/model_y'
+    config['n_layers'] = 2
+    config['predict_latent_size'] = 64
+    config['predict_latent_dim'] = 250
     return config
 
 
@@ -171,10 +175,11 @@ def opt_config():
     config = AttributeDict()
     config['opt_num_part'] = 10
     config['opt_num_swarms'] = 1
-    config['opt_iterations_num'] = 20
-    config['opt_num_track'] = 10
-    # values in ['lcd', 'pld','density','agsa', 'co2n2_co2_mol_kg',
-    #            'co2n2_n2_mol_kg', 'co2ch4_co2_mol_kg','co2ch4_ch4_mol_kg']
+    config['opt_iterations_num'] = 50
+    config['opt_num_track'] = 20
+
+    # 'opt_fitness_name' values in ['lcd', 'pld','density','agsa', 'co2n2_co2_mol_kg',
+    #                               'co2n2_n2_mol_kg', 'co2ch4_co2_mol_kg','co2ch4_ch4_mol_kg']
     config['opt_fitness_name'] = 'co2n2_co2_mol_kg'
 
     config['opt_col'] = ['fitness',

@@ -7,6 +7,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 from rdkit import DataStructs
 import rdkit
 from rdkit import Chem
+from rdkit import RDLogger
 import math
 import sys
 import numpy as np
