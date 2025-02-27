@@ -90,11 +90,7 @@ class VAE(nn.Module):
 
         loss['mof'], outs['mof'] = self.dec_mof(mol_batch['mof'], root_vecs)
 
-        tree_vecs_pooled = tree_vecs.mean(dim=0)
-        tree_vecs_pooled_transformed = tree_vecs_pooled.view(1, -1).expand(root_vecs.size(0), -1)
-        concatenated_features = torch.cat((root_vecs, tree_vecs_pooled_transformed.to(device)), dim=1)
-
-        loss['y'], outs['y'] = self.dec_y(concatenated_features, mol_batch['y'], mol_batch['y_mask'])
+        loss['y'], outs['y'] = self.dec_y(root_vecs, mol_batch['y'], mol_batch['y_mask'])
         outs['y_mask'] = mol_batch['y_mask']
         return loss, wacc, iacc, tacc, sacc, outs
 
