@@ -146,7 +146,10 @@ class MolGraph(object):
         for bond in mol.GetBonds():
             a1 = bond.GetBeginAtom().GetIdx()
             a2 = bond.GetEndAtom().GetIdx()
-            btype = MolGraph.BOND_LIST.index(bond.GetBondType())
+            if bond.GetBondType() == rdkit.Chem.rdchem.BondType.DATIVE:
+                btype = 0
+            else:
+                btype = MolGraph.BOND_LIST.index(bond.GetBondType())
             graph[a1][a2]['label'] = btype
             graph[a2][a1]['label'] = btype
 

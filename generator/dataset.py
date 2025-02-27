@@ -1,4 +1,6 @@
-import os, random, gc
+import os
+import random
+import gc
 import pickle
 
 
@@ -17,7 +19,8 @@ class DataFolder(object):
             fn = os.path.join(self.data_folder, fn)
             with open(fn, 'rb') as f:
                 batches = pickle.load(f)
-            if self.shuffle: random.shuffle(batches)  #shuffle data before batch
+            if self.shuffle:
+                random.shuffle(batches)  # shuffle data before batch
             for batch in batches:
                 yield batch
             del batches
