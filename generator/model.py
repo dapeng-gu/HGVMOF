@@ -35,7 +35,7 @@ class VAE(nn.Module):
                                       config['dropout'])
         self.encoder.tie_embedding(self.decoder.hmpn)
 
-        self.R_mean = nn.Linear(config['hidden_size'], config['latent_size'])  # 250  32
+        self.R_mean = nn.Linear(config['hidden_size'], config['latent_size'])
         self.R_var = nn.Linear(config['hidden_size'], config['latent_size'])
 
         self.enc_mof = MOFEncoder(latent_dim=288, hidden_size=config['hidden_size'],

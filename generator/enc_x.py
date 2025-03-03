@@ -36,8 +36,8 @@ class MPNEncoder(nn.Module):
         node_hiddens = self.W_o(node_hiddens)
 
         mask = torch.ones(node_hiddens.size(0), 1, device=fnode.device)
-        mask[0, 0] = 0  # first node is padding
-        return node_hiddens * mask, h  # return only the hidden state (different from IncMPNEncoder in LSTM case)
+        mask[0, 0] = 0
+        return node_hiddens * mask, h
 
 
 class HierMPNEncoder(nn.Module):
@@ -76,7 +76,7 @@ class HierMPNEncoder(nn.Module):
 
         self.W_root = nn.Sequential(
             nn.Linear(hidden_size * 2, hidden_size),
-            nn.Tanh()  # root activation is tanh
+            nn.Tanh()
         )
         self.tree_encoder = MPNEncoder(rnn_type, hidden_size + MolGraph.MAX_POS, hidden_size, hidden_size, depthT,
                                        dropout)
@@ -115,7 +115,7 @@ class HierMPNEncoder(nn.Module):
         hnode = self.E_a.index_select(index=fnode, dim=0)
         fmess1 = hnode.index_select(index=fmess[:, 0], dim=0)  # fmess.append( (u, v, attr[0], attr[1]) )
         fmess2 = self.E_b.index_select(index=fmess[:, 2], dim=0)  # fmess2为键值
-        fpos = self.E_apos.index_select(index=fmess[:, 3], dim=0)  # 位置编码？
+        fpos = self.E_apos.index_select(index=fmess[:, 3], dim=0)
         hmess = torch.cat([fmess1, fmess2, fpos], dim=-1)
         return hnode, hmess, agraph, bgraph
 
@@ -218,7 +218,7 @@ class IncHierMPNEncoder(HierMPNEncoder):
         num_graph_nodes = graph_tensors[0].size(0)
 
         if len(subgraph[0]) + len(subgraph[1]) > 0:
-            sub_graph_tensors = self.get_sub_tensor(graph_tensors, subgraph)[:-1]  # graph tensor is already embedded
+            sub_graph_tensors = self.get_sub_tensor(graph_tensors, subgraph)[:-1]
             hgraph.node, hgraph.mess = self.graph_encoder(sub_graph_tensors, hgraph.mess, num_graph_nodes, subgraph)
 
         if len(subtree[0]) + len(subtree[1]) > 0:

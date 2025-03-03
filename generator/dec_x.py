@@ -6,7 +6,7 @@ from hgraph.mol_graph import MolGraph
 from hgraph.inc_graph import IncTree, IncGraph
 
 
-class HTuple():
+class HTuple:
     def __init__(self, node=None, mess=None, vmask=None, emask=None):
         self.node, self.mess = node, mess
         self.vmask, self.emask = vmask, emask
@@ -85,7 +85,7 @@ class HierMPNDecoder(nn.Module):
         hgraph.vmask.scatter_(0, new_atom_index, 1)
 
         new_atom_set = set(new_atoms)
-        new_bonds = []  # new bonds are the subgraph induced by new_atoms
+        new_bonds = []
         for zid in new_atoms:
             for nid in graph_batch[zid]:
                 if nid not in new_atom_set: continue
@@ -146,11 +146,11 @@ class HierMPNDecoder(nn.Module):
         cls_vecs = torch.cat([cls_vecs, cls_cxt], dim=-1)
         cls_scores = self.clsNN(cls_vecs)
 
-        if cls_labs is None:  # inference mode
-            icls_scores = self.iclsNN(cls_vecs)  # no masking
+        if cls_labs is None:
+            icls_scores = self.iclsNN(cls_vecs)
         else:
             vocab_masks = self.vocab.get_mask(cls_labs)
-            icls_scores = self.iclsNN(cls_vecs) + vocab_masks  # apply mask by log(x + mask): mask=0 or -INF
+            icls_scores = self.iclsNN(cls_vecs) + vocab_masks
         return cls_scores, icls_scores
 
     def get_assm_score(self, src_graph_vecs, batch_idx, assm_vecs):
@@ -186,11 +186,11 @@ class HierMPNDecoder(nn.Module):
         for i in range(batch_size):
             root = tree_batch.nodes[tree_scope[i][0]]
             clab, ilab = self.vocab[root['label']]
-            all_cls_preds.append((init_vecs[i], i, clab, ilab))  # cluster prediction
+            all_cls_preds.append((init_vecs[i], i, clab, ilab))
             new_atoms.extend(root['cluster'])
 
         subgraph = self.update_graph_mask(graph_batch, new_atoms, hgraph)
-        graph_tensors = self.hmpn.embed_graph(graph_tensors) + (graph_tensors[-1],)  # preprocess graph tensors
+        graph_tensors = self.hmpn.embed_graph(graph_tensors) + (graph_tensors[-1],)
 
         maxt = max([len(x) for x in orders])
         max_cls_size = max([len(attr) * 2 for node, attr in tree_batch.nodes(data='cluster')])
@@ -221,10 +221,10 @@ class HierMPNDecoder(nn.Module):
             new_atoms = []
             for i in batch_list:
                 xid, yid, tlab = orders[i][t]
-                all_topo_preds.append((htree.node[xid], i, tlab))  # topology prediction
+                all_topo_preds.append((htree.node[xid], i, tlab))
                 if yid is not None:
                     mess_idx = tree_batch[xid][yid]['mess_idx']
-                    new_atoms.extend(tree_batch.nodes[yid]['cluster'])  # NOTE: regardless of tlab = 0 or 1
+                    new_atoms.extend(tree_batch.nodes[yid]['cluster'])
 
                 if tlab == 0: continue
 
@@ -232,15 +232,14 @@ class HierMPNDecoder(nn.Module):
                 clab, ilab = self.vocab[tree_batch.nodes[yid]['label']]
                 mess_idx = tree_batch[xid][yid]['mess_idx']
                 hmess = self.rnn_cell.get_hidden_state(htree.mess)
-                all_cls_preds.append((hmess[mess_idx], i, clab, ilab))  # cluster prediction using message
+                all_cls_preds.append((hmess[mess_idx], i, clab, ilab))
 
                 inter_label = tree_batch.nodes[yid]['inter_label']
                 inter_label = [(pos, self.vocab[(cls, icls)][1]) for pos, icls in inter_label]
                 inter_size = self.vocab.get_inter_size(ilab)
 
-                if len(tree_batch.nodes[xid]['cluster']) > 2:  # uncertainty occurs only when previous cluster is a ring
-                    nth_child = tree_batch[yid][xid][
-                        'label']  # must be yid -> xid (graph order labeling is different from tree)
+                if len(tree_batch.nodes[xid]['cluster']) > 2:
+                    nth_child = tree_batch[yid][xid]['label']
                     cands = tree_batch.nodes[yid]['assm_cands']
                     icls = list(zip(*inter_label))[1]
                     cand_vecs = self.enum_attach(hgraph, cands, icls, nth_child)
@@ -250,7 +249,7 @@ class HierMPNDecoder(nn.Module):
                         cand_vecs = F.pad(cand_vecs, (0, 0, 0, pad_len))
 
                     batch_idx = hgraph.emask.new_tensor([i] * max_cls_size)
-                    all_assm_preds.append((cand_vecs, batch_idx, 0))  # the label is always the first of assm_cands
+                    all_assm_preds.append((cand_vecs, batch_idx, 0))
 
             subgraph = self.update_graph_mask(graph_batch, new_atoms, hgraph)
 
@@ -323,7 +322,6 @@ class HierMPNDecoder(nn.Module):
             new_atoms, new_bonds, attached = graph_batch.add_mol(bid, root_smiles, [], 0)
             tree_batch.register_cgraph(root_idx, new_atoms, new_bonds, attached)
 
-        # invariance: tree_tensors is equal to inter_tensors (but inter_tensor's init_vec is 0)
         tree_tensors = tree_batch.get_tensors()
         graph_tensors = graph_batch.get_tensors()
 
@@ -331,7 +329,7 @@ class HierMPNDecoder(nn.Module):
         hinter = HTuple(mess=self.rnn_cell.get_init_state(tree_tensors[1]))
         hgraph = HTuple(mess=self.rnn_cell.get_init_state(graph_tensors[1]))
         h = self.rnn_cell.get_hidden_state(htree.mess)
-        h[1: batch_size + 1] = init_vecs  # wiring root (only for tree, not inter)
+        h[1: batch_size + 1] = init_vecs
 
         for t in range(max_decode_step):
             batch_list = [bid for bid in range(batch_size) if len(stack[bid]) > 0]
@@ -357,8 +355,8 @@ class HierMPNDecoder(nn.Module):
             for i, bid in enumerate(batch_list):
                 if topo_preds[i] > 0.5 and tree_batch.can_expand(stack[bid][-1]):
                     expand_list.append((len(new_mess), bid))
-                    new_node = tree_batch.add_node()  # new node label is yet to be predicted
-                    edge_feature = batch_idx.new_tensor([stack[bid][-1], new_node, 0])  # parent to child is 0
+                    new_node = tree_batch.add_node()
+                    edge_feature = batch_idx.new_tensor([stack[bid][-1], new_node, 0])
                     new_edge = tree_batch.add_edge(stack[bid][-1], new_node, edge_feature)
                     stack[bid].append(new_node)
                     new_mess.append(new_edge)
@@ -366,7 +364,7 @@ class HierMPNDecoder(nn.Module):
                     child = stack[bid].pop()
                     if len(stack[bid]) > 0:
                         nth_child = tree_batch.graph.in_degree(
-                            stack[bid][-1])  # edge child -> father has not established
+                            stack[bid][-1])
                         edge_feature = batch_idx.new_tensor([child, stack[bid][-1], nth_child])
                         new_edge = tree_batch.add_edge(child, stack[bid][-1], edge_feature)
                         new_mess.append(new_edge)
@@ -385,14 +383,14 @@ class HierMPNDecoder(nn.Module):
                 cls_scores, icls_scores = self.get_cls_score(src_tree_vecs, expand_idx, forward_mess, None)
                 scores, cls_topk, icls_topk = hier_topk(cls_scores, icls_scores, self.vocab, beam)
                 if not greedy:
-                    scores = torch.exp(scores)  # score is output of log_softmax
+                    scores = torch.exp(scores)
                     shuf_idx = torch.multinomial(scores, beam, replacement=True).tolist()
 
             for i, bid in enumerate(expand_list):
                 new_node, fa_node = stack[bid][-1], stack[bid][-2]
                 success = False
                 cls_beam = range(beam) if greedy else shuf_idx[i]
-                for kk in cls_beam:  # try until one is chemically valid
+                for kk in cls_beam:
                     if success: break
                     clab, ilab = cls_topk[i][kk], icls_topk[i][kk]
                     node_feature = batch_idx.new_tensor([clab, ilab])
@@ -425,8 +423,8 @@ class HierMPNDecoder(nn.Module):
                             success = True
                             break
 
-                if not success:  # force backtrack
-                    child = stack[bid].pop()  # pop the dummy new_node which can't be added
+                if not success:
+                    child = stack[bid].pop()
                     nth_child = tree_batch.graph.in_degree(stack[bid][-1])
                     edge_feature = batch_idx.new_tensor([child, stack[bid][-1], nth_child])
                     new_edge = tree_batch.add_edge(child, stack[bid][-1], edge_feature)
