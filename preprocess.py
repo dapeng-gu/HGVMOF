@@ -194,7 +194,7 @@ if __name__ == "__main__":
     utils.set_seed(config['generator_rand_seed'])
 
     # files in "data/df/"
-    config['df_cleaning'] = False
+    config['df_cleaning'] = True
     # files in "results/vocabs/"
     # for vocab_x, you may need to add some additional motif vocabulary.
     config['get_vocabs'] = False
