@@ -11,6 +11,8 @@ from matplotlib.colors import LinearSegmentedColormap
 import sklearn.metrics
 import pandas as pd
 from torch.nn import functional as F
+from more_itertools import chunked
+from tqdm.autonotebook import tqdm
 
 from configs import AttributeDict
 
@@ -181,3 +183,22 @@ def masked_wmse_loss(y_hat, y, mask, w):
     weighted_loss = loss_tensor * w
     loss = torch.sum(weighted_loss) / (torch.sum(mask) + 1e-7)
     return loss
+
+
+def sample_model(inference_model, n, decice, batch_size=50, smiles_column='branch_smiles'):
+    n_loops = int(np.ceil(n / batch_size))
+    gen_df = pd.DataFrame()
+    z_list = []
+    for chunk in tqdm(chunked(range(n), batch_size), total=n_loops, desc='Samples'):
+        z = torch.randn(len(chunk), 64, device=decice)
+        z_list.append(z)
+        mof_building = inference_model.mof_z_to_mof_building(z)
+        mof_y = inference_model.mof_z_to_mof_y(z)
+        outs = inference_model.mof_building_and_mof_y_to_mof_dict(mof_building, mof_y)
+        if gen_df.empty:
+            gen_df = pd.DataFrame(outs)
+        else:
+            gen_df = pd.concat([gen_df, pd.DataFrame(outs)])
+    gen_df['valid'] = gen_df[smiles_column].apply(capacity_score_smiles)
+
+    return gen_df.reset_index(drop=True), torch.cat(z_list, dim=0)
