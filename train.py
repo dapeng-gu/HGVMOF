@@ -232,7 +232,6 @@ if __name__ == "__main__":
 
     pbar = tqdm(range(config['generator_train_epoch']), desc='Epochs')
     for epoch in pbar:
-        epoch += 1
         train_dataset = DataFolder(config['tensors_train'], config['train_batch_size'])
         test_dataset = DataFolder(config['tensors_test'], config['train_batch_size'])
 
@@ -267,22 +266,28 @@ if __name__ == "__main__":
                     % (total_step, beta, meters['kl'], meters['loss'], meters['wacc'], meters['iacc'], meters['tacc'],
                        meters['sacc'],
                        param_norm(model), grad_norm(model), w_loss['mof'], w_loss['y'], weights['mof']))
-                print("(weights['mof']:%.2f)*(model_loss['mof']: %.2f) =(w_loss['mof']: %.2f)" %
+                print("(weights['mof']:%.3f)*(model_loss['mof']: %.3f)*2 =(w_loss['mof']: %.3f)" %
                       (weights['mof'], model_loss['mof'], w_loss['mof']))
-                print("kl_loss: %.2f    mof_loss: %.2f    x_loss: %.2f    y_loss: %.2f    loss: %.2f"
-                      % (model_loss['kl'], model_loss['mof'], model_loss['x'], model_loss['y'], model_loss['loss']))
+                print("(weights['x']:%.3f)*(model_loss['x']: %.3f) =(w_loss['x']: %.3f)" %
+                      (weights['x'], model_loss['x'], w_loss['x']))
+                print("(weights['kl']:%.3f)*(model_loss['kl']: %.3f) =(w_loss['kl']: %.3f)" %
+                      (weights['kl'], model_loss['kl'], w_loss['kl']))
+                print("(weights['y']:%.3f)*(model_loss['y']: %.3f) =(w_loss['y']: %.3f)" %
+                      (weights['y'], model_loss['y'], w_loss['y']))
+                print("kl_loss: %.3f    mof_loss: %.3f    x_loss: %.3f    y_loss: %.3f    loss: %.3f"
+                      % (w_loss['kl'], w_loss['mof'], w_loss['x'], w_loss['y'], model_loss['loss']))
                 sys.stdout.flush()
                 for key in meters:
                     meters[key] = 0.0
 
             if total_step % 2000 == 0:
-                ckpt = (model.state_dict(), optimizer.state_dict(), total_step, beta)
+                ckpt = (model.state_dict(), optimizer.state_dict(), total_step, epoch, beta)
                 torch.save(ckpt, os.path.join(config['train_save_dir'], f"model.ckpt.{total_step}"))
                 # torch.save(ckpt, config['best_model'])
 
             if total_step % 2000 == 0:
                 scheduler.step()
-                print("learning rate: %.6f" % scheduler.get_lr()[0])
+                print("learning rate: %.6f" % scheduler.get_last_lr()[0])
 
             if total_step >= config['warmup'] and total_step % config['kl_anneal_iter'] == 0:
                 beta = min(config['max_beta'], beta + config['step_beta'])
