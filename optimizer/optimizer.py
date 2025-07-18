@@ -20,6 +20,21 @@ class BasePSOptimizer:
         uptake_scores = [swarm.mof[index][self.fitness_name] for index in range(swarm.num_part)]
         smiles = [swarm.mof[index]['branch_smiles'] for index in range(swarm.num_part)]
 
+        combination_scores = []
+        combination_file = pd.read_csv('data/original_data/combinations.csv', keep_default_na=False)
+        for mof in swarm.mof:
+            mof_building_dict = {
+                'metal_node': mof['metal_node'],
+                'organic_core': mof['organic_core'],
+                'topology': mof['topology'],
+            }
+            mof_building_df = pd.DataFrame([mof_building_dict])
+            match = pd.merge(combination_file, mof_building_df, on=list(mof_building_df.keys()), how='inner')
+            if not match.empty:
+                combination_scores.append(1)
+            else:
+                combination_scores.append(0)
+
         smiles_scores = []
         for smile in smiles:
             smiles_scores.append(utils.capacity_score_smiles(smile))
@@ -27,6 +42,9 @@ class BasePSOptimizer:
 
         for index, smiles_score in enumerate(smiles_scores):
             if not smiles_score:
+                fitness[index] = 0
+        for index, combination_score in enumerate(combination_scores):
+            if combination_score == 0:
                 fitness[index] = 0
         swarm.update_fitness(fitness)
         return swarm
