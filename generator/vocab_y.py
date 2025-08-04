@@ -34,7 +34,7 @@ class PropVocab:
         self.scaler = scaler
         self.labels = labels
         if weights is None:
-            # 默认生成权重全为1的列表
+            # 默认生成权重全为1的list
             weights = np.ones(len(labels)).astype(np.float32)
         self.weights = weights
 

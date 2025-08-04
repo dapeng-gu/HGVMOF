@@ -25,7 +25,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model_y.parameters(), lr=0.001)
 
     if config['load_model_y']:
-        print('---------------- continuing -------------------------------------')
+        print('----------------- continuing -------------------------------------')
         model_y_state, optimizer_state, epoch_start = torch.load(config['best_model_y'])
         model_y.load_state_dict(model_y_state)
         optimizer.load_state_dict(optimizer_state)

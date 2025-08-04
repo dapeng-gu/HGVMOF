@@ -84,7 +84,7 @@ class LSTM(nn.Module):
     def get_hidden_state(self, h):
         return h[0]
 
-    def LSTM(self, x, h_nei, c_nei):
+    def lstm(self, x, h_nei, c_nei):
         h_sum_nei = h_nei.sum(dim=1)
         x_expand = x.unsqueeze(1).expand(-1, h_nei.size(1), -1)  # flat
         i = self.W_i(torch.cat([x, h_sum_nei], dim=-1))  # i = w[h,x]+b
@@ -104,7 +104,7 @@ class LSTM(nn.Module):
         for i in range(self.depth):
             h_nei = index_select_ND(h, 0, bgraph)
             c_nei = index_select_ND(c, 0, bgraph)
-            h, c = self.LSTM(fmess, h_nei, c_nei)  # 使用LSTM聚合？
+            h, c = self.lstm(fmess, h_nei, c_nei)
             c = c * mask
         return h, c
 
@@ -116,7 +116,7 @@ class LSTM(nn.Module):
         for i in range(self.depth):
             h_nei = index_select_ND(h, 0, bgraph)
             c_nei = index_select_ND(c, 0, bgraph)
-            sub_h, sub_c = self.LSTM(fmess, h_nei, c_nei)
+            sub_h, sub_c = self.lstm(fmess, h_nei, c_nei)
             h = index_scatter(sub_h, h, submess)
             c = index_scatter(sub_c, c, submess)
         return h, c

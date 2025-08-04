@@ -202,3 +202,52 @@ def sample_model(inference_model, n, decice, batch_size=50, smiles_column='branc
     gen_df['valid'] = gen_df[smiles_column].apply(capacity_score_smiles)
 
     return gen_df.reset_index(drop=True), torch.cat(z_list, dim=0)
+
+def plot_scatter_with_deviation_and_ci_new(y_true, y_pred, r2, r2_title, index, n_bootstrap=1000, k_folds=5, ci=0.95):
+    
+    # 计算R2置信区间
+    _, ci_lower, ci_upper = combined_r2_ci(y_true, y_pred, n_bootstrap=n_bootstrap, k_folds=k_folds, ci=ci)
+    
+    # 计算偏差
+    y = np.array(y_true)
+    x = np.array(y_pred)
+    deviation = np.abs(y - x)
+    deviation = deviation / deviation.max()
+    deviation = np.clip(deviation, np.percentile(deviation, 0), np.percentile(deviation, 80))
+
+    cmap = LinearSegmentedColormap.from_list('custom_cmap',
+                                             [(161 / 255, 225 / 255, 250 / 255), (12 / 255, 108 / 255, 196 / 255)])
+
+    plt.figure(figsize=(8, 6.5), dpi=100)
+    plt.scatter(y_pred, y_true, alpha=0.5, s=120, c=deviation, cmap=cmap)
+
+    # 添加R2和置信区间文本（分两行，置信区间字体较小）
+    ci_percent = int(ci * 100)
+    plt.text(0.05, 0.95, f'R² = {r2:.2f}', fontsize=30, color='black', ha='left', va='top',
+             transform=plt.gca().transAxes, fontweight='bold')
+    plt.text(0.05, 0.86, f'({ci_percent}% CI: [{ci_lower:.2f}, {ci_upper:.2f}])',
+             fontsize=20, color='black', ha='left', va='top',
+             transform=plt.gca().transAxes, fontweight='bold')
+
+    max_val = max(max(y_true), max(y_pred))
+    plt.plot([0, max_val], [0, max_val], color='black', linestyle='--', linewidth=3)
+
+    plt.xlabel('Predicted values', fontsize=30, fontweight='bold')
+    plt.ylabel('Calculated values', fontsize=30, fontweight='bold')
+    plt.title(r2_title, fontsize=30, fontweight='bold')
+
+    plt.gca().get_xaxis().set_ticklabels([])
+    plt.gca().get_yaxis().set_ticklabels([])
+
+    ax = plt.gca()
+    ax.spines['bottom'].set_linewidth(3)
+    ax.spines['left'].set_linewidth(3)
+    plt.tick_params(width=3, labelsize=4)
+
+    cbar = plt.colorbar(plt.cm.ScalarMappable(cmap=cmap), ax=plt.gca(), label='Deviation value')
+    cbar.set_ticks([])
+    cbar.ax.yaxis.label.set_size(30)
+    cbar.ax.yaxis.label.set_fontweight('bold')
+    plt.savefig(f'results/images/' + str(index) + '.png')
+
+    return plt

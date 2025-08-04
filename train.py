@@ -220,12 +220,12 @@ if __name__ == "__main__":
     grad_norm = lambda m: math.sqrt(sum([p.grad.norm().item() ** 2 for p in m.parameters() if p.grad is not None]))
 
     meters = {
-        'kl': 0.0,  # KL 散度损失
-        'loss': 0.0,  # 总损失
-        'wacc': 0.0,  # 单词准确率
-        'iacc': 0.0,  # 内部准确率
-        'tacc': 0.0,  # 拓扑准确率
-        'sacc': 0.0  # 组装准确率
+        'kl': 0.0,  # KL divergence loss
+        'loss': 0.0,  # Total loss
+        'wacc': 0.0,  # Word accuracy
+        'iacc': 0.0,  # Internal accuracy
+        'tacc': 0.0,  # Topology accuracy
+        'sacc': 0.0  # Assembly accuracy
     }
     schedulers = setup_schedulers(config)
     stats = TrainStats(config)
