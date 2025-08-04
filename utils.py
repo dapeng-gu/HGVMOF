@@ -3,13 +3,17 @@ import random
 import re
 from collections import OrderedDict
 from typing import Tuple
+from scipy import stats
 
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import sklearn.metrics
 import pandas as pd
+from sklearn.model_selection import KFold
 from torch.nn import functional as F
 from more_itertools import chunked
 from tqdm.autonotebook import tqdm
@@ -203,9 +207,9 @@ def sample_model(inference_model, n, decice, batch_size=50, smiles_column='branc
 
     return gen_df.reset_index(drop=True), torch.cat(z_list, dim=0)
 
+
 def plot_scatter_with_deviation_and_ci_new(y_true, y_pred, r2, r2_title, index, n_bootstrap=1000, k_folds=5, ci=0.95):
-    
-    # 计算R2置信区间
+
     _, ci_lower, ci_upper = combined_r2_ci(y_true, y_pred, n_bootstrap=n_bootstrap, k_folds=k_folds, ci=ci)
     
     # 计算偏差
@@ -251,3 +255,105 @@ def plot_scatter_with_deviation_and_ci_new(y_true, y_pred, r2, r2_title, index, 
     plt.savefig(f'results/images/' + str(index) + '.png')
 
     return plt
+
+
+def bootstrap_r2_ci(y_true, y_pred, n_iterations=1000, ci=0.95):
+    r2_scores = []
+    n = len(y_true)
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+
+    # 计算原始R2
+    orig_r2 = r2_score(y_true, y_pred)
+
+    for _ in range(n_iterations):
+        indices = np.random.choice(range(n), size=n, replace=True)
+        if len(np.unique(y_true[indices])) > 1:  # 确保有足够的变异性
+            r2 = r2_score(y_true[indices], y_pred[indices])
+            r2_scores.append(r2)
+
+    # 计算置信区间
+    lower = np.percentile(r2_scores, (1 - ci) / 2 * 100)
+    upper = np.percentile(r2_scores, (1 + ci) / 2 * 100)
+    mean_r2 = np.mean(r2_scores)
+
+    return mean_r2, lower, upper
+
+
+def cv_r2_ci(X, y, k=5, ci=0.95):
+    """
+    使用交叉验证方法计算R2的置信区间
+
+    参数:
+    X: 特征矩阵
+    y: 目标变量
+    k: 折数
+    ci: 置信水平 (0-1)
+
+    返回:
+    mean_r2: 平均R2值
+    lower: 置信区间下限
+    upper: 置信区间上限
+    """
+    X = np.array(X).reshape(-1, 1) if len(np.array(X).shape) == 1 else np.array(X)
+    y = np.array(y)
+
+    kf = KFold(n_splits=k, shuffle=True, random_state=42)
+    r2_values = []
+
+    for train_idx, test_idx in kf.split(X):
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+
+        model = LinearRegression().fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        r2 = r2_score(y_test, y_pred)
+        r2_values.append(r2)
+
+    mean_r2 = np.mean(r2_values)
+    std_r2 = np.std(r2_values)
+
+    # 使用t分布计算置信区间
+    t_value = stats.t.ppf((1 + ci) / 2, k - 1)
+    margin = t_value * (std_r2 / np.sqrt(k))
+
+    lower = max(0, mean_r2 - margin)  # 确保R2不小于0
+    upper = min(1, mean_r2 + margin)  # 确保R2不大于1
+
+    return mean_r2, lower, upper
+
+
+def combined_r2_ci(y_true, y_pred, n_bootstrap=1000, k_folds=5, ci=0.95):
+    """
+    结合Bootstrap和交叉验证方法计算R2的置信区间
+
+    参数:
+    y_true: 真实值数组
+    y_pred: 预测值数组
+    n_bootstrap: Bootstrap迭代次数
+    k_folds: 交叉验证折数
+    ci: 置信水平 (0-1)
+
+    返回:
+    r2: 原始R2值
+    lower: 置信区间下限
+    upper: 置信区间上限
+    """
+    # 计算原始R2
+    r2 = r2_score(y_true, y_pred)
+
+    # Bootstrap置信区间
+    bs_mean, bs_lower, bs_upper = bootstrap_r2_ci(y_true, y_pred, n_iterations=n_bootstrap, ci=ci)
+
+    # 为交叉验证准备数据
+    X = np.array(y_true).reshape(-1, 1)  # 使用真实值作为特征
+    y = np.array(y_pred)  # 使用预测值作为目标
+
+    # 交叉验证置信区间 (反转X和y是为了评估预测的一致性)
+    cv_mean, cv_lower, cv_upper = cv_r2_ci(X, y, k=k_folds, ci=ci)
+
+    # 综合两种方法
+    final_lower = max(0, (bs_lower + cv_lower) / 2)  # 确保R2不小于0
+    final_upper = min(1, (bs_upper + cv_upper) / 2)  # 确保R2不大于1
+
+    return r2, final_lower, final_upper
