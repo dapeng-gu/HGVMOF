@@ -15,7 +15,7 @@ from generator.vocab_mof import MOFVocab
 from generator.vocab_y import PropVocab
 from hgraph.mol_graph import MolGraph
 
-torch.multiprocessing.set_sharing_strategy('file_system ')
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 DataTuple = Tuple[Text, Optional[List[int]], Optional[np.ndarray], Optional[np.ndarray]]
 
